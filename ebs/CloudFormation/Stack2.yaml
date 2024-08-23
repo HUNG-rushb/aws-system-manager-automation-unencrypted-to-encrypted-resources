@@ -147,8 +147,8 @@ Resources:
               Service: ec2
               Api: CreateVolume
               AvailabilityZone: "{{describeInstance.availabilityZone}}"
-              Encrypted: true
-              KmsKeyId: "{{kmsKeyId}}"
+              # Encrypted: true
+              # KmsKeyId: "{{kmsKeyId}}"
               SnapshotId: "{{extractSnapshotId.SnapshotId}}"
               VolumeType: "{{describeVolume.deviceVolumeType}}"
               TagSpecifications:
