@@ -1,16 +1,19 @@
 Description: This sample, non-production-ready template creates the IAM Role and KMS Key for the EBS Encryption Remediation Process
 AWSTemplateFormatVersion: 2010-09-09
-Parameters: 
+Parameters:
   KeyAdminParameter:
     Description: ARN of Key Admin IAM User or Role
     Type: String
-Resources: 
+  DefaultEBSKmsKeyArn:
+    Type: String
+    Description: "The ARN of the KMS key to use for EBS encryption."
+Resources:
   EncryptionRemediationPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: EncryptEBSAutomationRole-policy
       Roles:
-       - !Ref EncryptionRemediationRole
+        - !Ref EncryptionRemediationRole
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -20,8 +23,8 @@ Resources:
               - cloudformation:DescribeStacks
               - cloudformation:DeleteStack
             Resource:
-              - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/DetachEBSVolumeStack*'
-              - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/AttachEBSVolumeStack*'
+              - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/DetachEBSVolumeStack*"
+              - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/AttachEBSVolumeStack*"
           - Effect: Allow
             Action:
               - ec2:AttachVolume
@@ -43,14 +46,14 @@ Resources:
               - tag:TagResources
               - ssm:GetAutomationExecution
               - ssm:StartAutomationExecution
-            Resource: '*'
+            Resource: "*"
           - Effect: Allow
             Action:
               - lambda:DeleteFunction
               - lambda:CreateFunction
               - lambda:GetFunction*
               - lambda:InvokeFunction
-            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:DetachVolumeLambda*'
+            Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:DetachVolumeLambda*"
           - Effect: Allow
             Action:
               - kms:Encrypt
@@ -60,7 +63,7 @@ Resources:
               - kms:CreateGrant
               - kms:ListGrants
               - kms:DescribeKey
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${EBSEncryptionKey.KeyId}'
+            Resource: !Ref DefaultEBSKmsKeyArn
           - Effect: Allow
             Action:
               - iam:PassRole
@@ -69,7 +72,7 @@ Resources:
               - iam:CreateRole
               - iam:GetRole*
               - iam:DeleteRolePolicy
-            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DetachEBSVolumeStack*LambdaRole*'
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/DetachEBSVolumeStack*LambdaRole*"
   EncryptionRemediationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -82,65 +85,14 @@ Resources:
                 - ssm.amazonaws.com
                 - ec2.amazonaws.com
         Version: "2012-10-17"
-  EBSEncryptionKey:
-    Type: AWS::KMS::Key
-    Properties: 
-      Description: Key used for encryption EBS volumes
-      Enabled: True
-      EnableKeyRotation: True
-      KeyPolicy: 
-        Version: '2012-10-17'
-        Id: key-default-1
-        Statement:
-        - Sid: Enable IAM User Permissions
-          Effect: Allow
-          Principal:
-            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-          Action: kms:*
-          Resource: '*'
-        - Sid: Allow administration of the key
-          Effect: Allow
-          Principal:
-            AWS: !Ref KeyAdminParameter
-          Action:
-          - kms:Create*
-          - kms:Describe*
-          - kms:Enable*
-          - kms:List*
-          - kms:Put*
-          - kms:Update*
-          - kms:Revoke*
-          - kms:Disable*
-          - kms:Get*
-          - kms:Delete*
-          - kms:ScheduleKeyDeletion
-          - kms:CancelKeyDeletion
-          Resource: '*'
-        - Sid: Allow use of the key
-          Effect: Allow
-          Principal:
-            AWS: !GetAtt EncryptionRemediationRole.Arn
-          Action:
-          - kms:DescribeKey
-          - kms:Encrypt
-          - kms:Decrypt
-          - kms:ReEncrypt*
-          - kms:GenerateDataKey
-          - kms:GenerateDataKeyWithoutPlaintext
-          Resource: '*'
-  EBSEncryptionKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties: 
-      AliasName: alias/EC2EncryptionAtRestKeyAlias
-      TargetKeyId: !Ref EBSEncryptionKey
 Outputs:
   RoleARN:
     Description: ARN of the EncryptionRemediationRole
     Value: !GetAtt EncryptionRemediationRole.Arn
-    Export: 
+    Export:
       Name: !Sub "${AWS::StackName}-RoleARN"
   KeyID:
     Description: Key ID of EBSEncryptionKey
-    Value: !Ref EBSEncryptionKey
-    Export: 
+    Value: !Ref DefaultEBSKmsKeyArn
+    Export:
       Name: !Sub "${AWS::StackName}-KeyID"
