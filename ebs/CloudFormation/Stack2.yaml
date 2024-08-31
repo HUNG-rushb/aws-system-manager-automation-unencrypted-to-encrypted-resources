@@ -26,11 +26,6 @@ Resources:
           volumeId:
             description: (Required) Volume ID of the EBS volume attached to an ec2 instance whose volume needs to be encrypted
             type: String
-          kmsKeyId:
-            description: (Required) Customer KMS key to use during the encryption
-            type: String
-            default:
-              Fn::ImportValue: !Sub "${RoleKeyStackNameParameter}-KeyID"
           automationAssumeRole:
             type: String
             description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
@@ -147,8 +142,6 @@ Resources:
               Service: ec2
               Api: CreateVolume
               AvailabilityZone: "{{describeInstance.availabilityZone}}"
-              # Encrypted: true
-              # KmsKeyId: "{{kmsKeyId}}"
               SnapshotId: "{{extractSnapshotId.SnapshotId}}"
               VolumeType: "{{describeVolume.deviceVolumeType}}"
               TagSpecifications:
@@ -299,10 +292,6 @@ Resources:
           StaticValue:
             Values:
               - Fn::ImportValue: !Sub "${RoleKeyStackNameParameter}-RoleARN"
-        kmsKeyId:
-          StaticValue:
-            Values:
-              - Fn::ImportValue: !Sub "${RoleKeyStackNameParameter}-KeyID"
         volumeId:
           ResourceValue:
             Value: RESOURCE_ID
