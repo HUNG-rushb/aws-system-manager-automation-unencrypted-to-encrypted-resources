@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS Config Rule with SSM Automation remediation to ensure CloudWatch Log Groups are encrypted with KMS."
+Parameters:
+  DefaultKmsKeyArn:
+    Type: String
+    Description: "The ARN of the KMS key to use for encryption."
+Resources:
+  # Policy for Encrypt role to use
+  EncryptionRemediationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: EncryptLogGroupAutomationRole-policy
+      Roles:
+        - !Ref ConfigEncryptLogGroupRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "logs:*"
+              - "kms:*"
+              - "cloudwatch:*"
+              - "config:PutEvaluations"
+              - "ssm:StartAutomationExecution"
+            Resource: "*"
+
+  # IAM Role for AWS Config to use
+  ConfigEncryptLogGroupRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ssm.amazonaws.com
+                - cloudwatch.amazonaws.com
+                - cloudwatch.amazonaws.com
+        Version: "2012-10-17"
+
+  # AWS Config Rule to check log group encryption
+  ConfigRule:
+    Type: "AWS::Config::ConfigRule"
+    Properties:
+      ConfigRuleName: "encrypted-cloudwatch-log-group"
+      Description: "Check whether CloudWatch Log Groups are encrypted with a KMS key."
+      Source:
+        Owner: "AWS"
+        SourceIdentifier: CLOUDWATCH_LOG_GROUP_ENCRYPTED
+      Scope:
+        ComplianceResourceTypes:
+          - "AWS::Logs::LogGroup"
+      # RoleArn: !GetAtt ConfigEncryptLogGroupRole.Arn
+
+  # SSM Automation Document to encrypt CloudWatch Log Group
+  SsmAutomationEncryptLogGroupDocument:
+    Type: "AWS::SSM::Document"
+    Properties:
+      DocumentType: "Automation"
+      DocumentFormat: "YAML"
+      Content:
+        schemaVersion: "0.3"
+        description: "Automatically encrypt CloudWatch Log Group with KMS Key"
+        assumeRole: "{{AutomationAssumeRole}}"
+        parameters:
+          AutomationAssumeRole:
+            description: test
+            type: String
+          KmsKeyArn:
+            description: test
+            type: String
+          LogGroupName:
+            description: test
+            type: String
+        mainSteps:
+          - name: EncryptLogGroup
+            action: "aws:executeAwsApi"
+            inputs:
+              Service: "logs"
+              Api: "AssociateKmsKey"
+              logGroupName: "{{LogGroupName}}"
+              kmsKeyId: "{{KmsKeyArn}}"
+
+  # Remediation for AWS Config Rule using SSM Automation
+  EncryptLogGroupRemediation:
+    Type: "AWS::Config::RemediationConfiguration"
+    Properties:
+      # ConfigRuleName: !Ref ConfigRule
+      ConfigRuleName: "encrypted-cloudwatch-log-group"
+      # TargetId: !Ref SsmAutomationEncryptLogGroupDocument
+      TargetId:
+        Ref: SsmAutomationEncryptLogGroupDocument
+      TargetType: SSM_DOCUMENT
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values:
+              - !GetAtt ConfigEncryptLogGroupRole.Arn
+        LogGroupName:
+          ResourceValue:
+            Value: RESOURCE_ID
+        KmsKeyArn:
+          StaticValue:
+            Values:
+              - !Ref DefaultKmsKeyArn
+      Automatic: false
+      TargetVersion: "1"
+      # MaximumAutomaticAttempts: 5
+      # RetryAttemptSeconds: 60
+    DependsOn:
+      - SsmAutomationEncryptLogGroupDocument
+
+Outputs:
+  ConfigRuleName:
+    Description: "The name of the AWS Config rule to check log group encryption."
+    Value: !Ref ConfigRule
+  AutomationDocumentName:
+    Description: "The name of the SSM Automation document for remediation."
+    Value: !Ref SsmAutomationEncryptLogGroupDocument
