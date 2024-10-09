@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudWatch Metric Filters, Alarms, and SNS Topic for email notifications"
+
+Resources:
+  # SNS Topic to send email notifications
+  AlarmSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: "AlarmNotificationTopic"
+      Subscription:
+        - Protocol: "email"
+          Endpoint: "<your-email@example.com>" # Replace with your email address
+
+  # Metric Filter 1: Monitoring ERROR logs
+  ErrorMetricFilter:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      LogGroupName: "/aws/lambda/your-log-group" # Replace with your Log Group
+      FilterPattern: '"ERROR"'
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: "CustomMetrics"
+          MetricName: "ErrorCount"
+
+  # Metric Filter 2: Monitoring WARN logs
+  WarnMetricFilter:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      LogGroupName: "/aws/lambda/your-log-group" # Replace with your Log Group
+      FilterPattern: '"WARN"'
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: "CustomMetrics"
+          MetricName: "WarnCount"
+
+  # Metric Filter 3: Monitoring INFO logs
+  InfoMetricFilter:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      LogGroupName: "/aws/lambda/your-log-group" # Replace with your Log Group
+      FilterPattern: '"INFO"'
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: "CustomMetrics"
+          MetricName: "InfoCount"
+
+  # CloudWatch Alarm for Error logs
+  ErrorCountAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "HighErrorCountAlarm"
+      AlarmDescription: "Alarm if ErrorCount exceeds threshold"
+      Namespace: "CustomMetrics"
+      MetricName: "ErrorCount"
+      Statistic: "Sum"
+      Period: "60"
+      EvaluationPeriods: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      OKActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: "breaching"
+
+  # CloudWatch Alarm for Warn logs
+  WarnCountAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "HighWarnCountAlarm"
+      AlarmDescription: "Alarm if WarnCount exceeds threshold"
+      Namespace: "CustomMetrics"
+      MetricName: "WarnCount"
+      Statistic: "Sum"
+      Period: "60"
+      EvaluationPeriods: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      OKActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: "breaching"
+
+  # CloudWatch Alarm for Info logs
+  InfoCountAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "HighInfoCountAlarm"
+      AlarmDescription: "Alarm if InfoCount exceeds threshold"
+      Namespace: "CustomMetrics"
+      MetricName: "InfoCount"
+      Statistic: "Sum"
+      Period: "60"
+      EvaluationPeriods: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - !Ref AlarmSNSTopic
+      OKActions:
+        - !Ref AlarmSNSTopic
+      TreatMissingData: "breaching"
+
+Outputs:
+  SNSTopicARN:
+    Description: "ARN of the SNS Topic"
+    Value: !Ref AlarmSNSTopic
+  ErrorAlarmName:
+    Description: "Name of the CloudWatch Alarm for Error logs"
+    Value: !Ref ErrorCountAlarm
+  WarnAlarmName:
+    Description: "Name of the CloudWatch Alarm for Warn logs"
+    Value: !Ref WarnCountAlarm
+  InfoAlarmName:
+    Description: "Name of the CloudWatch Alarm for Info logs"
+    Value: !Ref InfoCountAlarm

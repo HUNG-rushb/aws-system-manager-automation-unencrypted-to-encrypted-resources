@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Custom SNS Notification for Internet and NAT Gateway Changes with Lambda"
+
+Resources:
+  # SNS Topic to send email notifications
+  SNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: "NetworkGatewayChangeNotification"
+      Subscription:
+        - Protocol: "email"
+          Endpoint: "<your-email@example.com>" # Replace with your email
+
+  # SNS Topic Policy to allow Lambda to publish to SNS
+  SNSTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sns:Publish"
+            Resource: !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+
+  # Lambda Function to customize the SNS message
+  CustomizeMessageFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: "index.handler"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: "nodejs14.x" # You can change this based on the language
+      Code:
+        ZipFile: |
+          const aws = require('aws-sdk');
+          const sns = new aws.SNS();
+
+          exports.handler = async (event) => {
+            const message = `Custom Notification: A ${event.detail.eventName} event occurred for ${event.detail.requestParameters.gatewayId}.`;
+            const params = {
+              Message: message,
+              TopicArn: process.env.SNSTopicArn
+            };
+            
+            // Send the customized message to SNS
+            await sns.publish(params).promise();
+            return { statusCode: 200, body: 'Message sent' };
+          };
+      Environment:
+        Variables:
+          SNSTopicArn: !Ref SNSTopic
+
+  # IAM Role for Lambda Function
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "LambdaSNSPublishPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref SNSTopic
+
+  # CloudWatch Events Rule for Internet Gateway changes
+  InternetGatewayChangeRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "Rule to detect changes to Internet Gateway"
+      EventPattern:
+        source:
+          - "aws.ec2"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "ec2.amazonaws.com"
+          eventName:
+            - "CreateInternetGateway"
+            - "AttachInternetGateway"
+            - "DetachInternetGateway"
+            - "DeleteInternetGateway"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt CustomizeMessageFunction.Arn
+          Id: "SendToLambdaForCustomMessage"
+
+  # CloudWatch Events Rule for NAT Gateway changes
+  NATGatewayChangeRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "Rule to detect changes to NAT Gateway"
+      EventPattern:
+        source:
+          - "aws.ec2"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "ec2.amazonaws.com"
+          eventName:
+            - "CreateNatGateway"
+            - "DeleteNatGateway"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt CustomizeMessageFunction.Arn
+          Id: "SendToLambdaForCustomMessageNAT"
+
+  # Permission for CloudWatch Events to invoke Lambda
+  LambdaInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CustomizeMessageFunction
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt InternetGatewayChangeRule.Arn
+
+Outputs:
+  SNSTopicArn:
+    Description: "ARN of the SNS topic"
+    Value: !Ref SNSTopic

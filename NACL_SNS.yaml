@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "SNS Notification for Network ACL Changes"
+Parameters:
+  EmailSubcribe:
+    Type: String
+    Description: "The ARN of the KMS key to use for encryption."
+Resources:
+  # SNS Topic
+  SNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: "NetworkACLChangeNotification"
+      Subscription:
+        - Protocol: "email"
+          Endpoint: !Ref EmailSubcribe # Replace with your email address
+
+  EventBridgeToToSnsPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+
+  # CloudWatch Events Rule for NACL changes
+  NetworkACLChangeRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "Rule to detect changes to Network ACLs"
+      EventPattern:
+        source:
+          - "aws.ec2"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "ec2.amazonaws.com"
+          eventName:
+            - "CreateNetworkAcl"
+            - "CreateNetworkAclEntry"
+            - "ReplaceNetworkAclEntry"
+            - "DeleteNetworkAcl"
+            - "DeleteNetworkAclEntry"
+      State: "ENABLED"
+      # RoleArn: !GetAtt EventRole.Arn
+      Targets:
+        - Arn: !Ref SNSTopic
+          Id: "SendToSNS"
+
+  # SNSpublishPolicy:
+  #   Type: AWS::IAM::ManagedPolicy
+  #   Properties:
+  #     ManagedPolicyName: EventRole-policy
+  #     Roles:
+  #       - !Ref EventRole
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Action:
+  #             - "sns:Publish"
+  #           Resource: !Ref SNSTopic
+
+  # # IAM Role for CloudWatch Events to invoke SNS
+  # EventRole:
+  #   Type: "AWS::IAM::Role"
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Principal:
+  #             Service: "events.amazonaws.com"
+  #           Action: "sts:AssumeRole"
+
+Outputs:
+  SNSTopicArn:
+    Description: "ARN of the SNS topic"
+    Value: !Ref SNSTopic
+  NetworkACLChangeRuleArn:
+    Description: "ARN of the SNS topic"
+    Value: !Ref NetworkACLChangeRule

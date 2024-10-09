@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudWatch Alarm for Network ACL Changes
+Parameters:
+  EmailSubcribe:
+    Type: String
+    Description: "The ARN of the KMS key to use for encryption."
+  TargetLogGroupName:
+    Type: String
+    Description: "The ARN of the KMS key to use for encryption."
+Resources:
+  # SNS Topic for alarm notifications
+  SNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: "NetworkAclChangeNotificationWithAlarm"
+      Subscription:
+        - Protocol: "email"
+          Endpoint: !Ref EmailSubcribe
+
+  # SNS Topic Policy for CloudWatch
+  SNSTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "cloudwatch.amazonaws.com"
+            Action: "sns:Publish"
+            Resource: !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+
+  # CloudWatch Log Group to store CloudTrail logs (Ensure CloudTrail is writing to this)
+  # CloudTrailLogGroup:
+  #   Type: "AWS::Logs::LogGroup"
+  #   Properties:
+  #     LogGroupName: "CloudTrail/Logs"
+  #     RetentionInDays: 365
+
+  # Metric Filter to detect Network ACL changes
+  NetworkAclChangeMetricFilter:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      LogGroupName: !Ref TargetLogGroupName
+      FilterPattern: "{ ($.eventName = CreateNetworkAcl) || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = DeleteNetworkAcl) || ($.eventName = ReplaceNetworkAclAssociation) }"
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: "NetworkAclChanges"
+          MetricName: "NetworkAclChangeCount"
+
+  # CloudWatch Alarm for the metric filter
+  NetworkAclChangeAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: "Alarm when a Network ACL change is detected"
+      MetricName: "NetworkAclChangeCount"
+      Namespace: "NetworkAclChanges"
+      Statistic: "Sum"
+      Period: "100"
+      EvaluationPeriods: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - !Ref SNSTopic
+      OKActions:
+        - !Ref SNSTopic
+
+Outputs:
+  SNSTopicArn:
+    Description: "SNS Topic ARN for Network ACL Change Notification"
+    Value: !Ref SNSTopic
+
+
+{ ($.eventName = "CreateNetworkAcl") || ($.eventName = "ReplaceNetworkAclEntry") || ($.eventName = "DeleteNetworkAcl") || ($.eventName = "ReplaceNetworkAclAssociation") }
